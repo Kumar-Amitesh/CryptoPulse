@@ -1,3 +1,4 @@
 .env
 api-server/node_modules
+api-server/src/logs
 work-server/node_modules
