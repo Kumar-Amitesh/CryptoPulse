@@ -1,8 +1,7 @@
-## Assignment Objective
+## CryptoPulse
 
-- This assignment is designed to assess your ability to build a full backend system, interact with external APIs, use databases, and work with background jobs and event queues.
-- You are required to build **two Node.js servers** using **MongoDB** and [**NATS](https://nats.io/)(or equivalent event queue)**. The two servers will communicate to collect and expose cryptocurrency statistics.
-- You’re free to use AI tools to help you with building the application.
+- This api is designed to assess your ability to build a full backend system, interact with external APIs, use databases, and work with background jobs and event queues.
+- Build **two Node.js servers** using **MongoDB** and [**NATS](https://nats.io/)(or equivalent event queue)**. The two servers will communicate to collect and expose cryptocurrency statistics.
 
 ## Task 1
 
@@ -67,37 +66,3 @@
     ```
     
 - The `api-server` should **subscribe** to the above event. Upon receiving the event, it should trigger the `storeCryptoStats()` function.
-
-## Success Criteria
-
-- Working `/stats` and `/deviation` APIs.
-- Background job running every 15 mins that publish an event to Nats(or any other event queue)
-- Inter-server communication via **NATS** only(or any other event queue)
-- MongoDB schema properly structured
-- Code quality, folder structure, and documentation
-
-## **Optional Tasks**
-
-1. Deploy your database using MongoDB Atlas or other similar tools.
-2. Deploy your backend using platforms like Heroku or any cloud platform like AWS, GCP or Azure and expose the API to the public.
-
-## Submission Guidelines
-
-- Create a GitHub repository with 2 folders:
-
-```jsx
-/api-server
-/worker-server
-```
-
-- Each folder must contain:
-    - Code
-    - `README.md` with setup instructions
-- Ensure that this is a private repository and share collaborator access with admin@koinx.com.
-- Once you’re done with the tasks below, please submit your details and the links in this form: https://forms.gle/zNGnv8prevFPNNNv9.
-
-**Notes:-**
-
-1. Think of this assignment as a production grade project. Using best practices, writing clean code etc. will fetch you additional points.
-2. Do think well about how you want to design your database schemas.
-3. We care about the usage of version control and the way you structure(and name) your commits!
