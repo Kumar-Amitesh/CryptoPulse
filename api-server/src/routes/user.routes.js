@@ -2,7 +2,12 @@ import Router from 'express'
 import {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshAccessToken,
+    chnageCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar
 } from '../controllers/user.controllers.js'
 import upload from '../middleware/multer.middleware.js'
 import {
@@ -23,5 +28,11 @@ router.route('/login').post(validateLogin,loginUser)
 
 //secured routes
 router.route('/logout').get(verifyJWT,logoutUser)
+router.route('/refresh-token').post(refreshAccessToken)
+router.route('/change-password').post(verifyJWT,chnageCurrentPassword)
+router.route('/current-user').get(verifyJWT,getCurrentUser)
+router.route('/update-account').post(verifyJWT,updateAccountDetails)
+
+router.route('/update-avatar').post(verifyJWT,upload.single('avatar'),updateUserAvatar)
 
 export default router

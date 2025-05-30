@@ -2,9 +2,13 @@ import asyncHandler from '../utils/asyncHandler.utils.js'
 import ApiError from '../utils/ApiError.utils.js'
 import ApiResponse from '../utils/ApiResponse.utils.js'
 import User from '../models/Users.models.js'
-import uploadOnCloudinary from '../utils/cloudinary.utils.js'
+import {
+    uploadOnCloudinary,
+    deleteFromCloudinary
+} from '../utils/cloudinary.utils.js'
 import logger from '../utils/logger.utils.js'
 import fs from 'fs'
+import jwt from 'jsonwebtoken'
 
 const generateTokens = async(userId)=>{
     try{
@@ -100,7 +104,7 @@ const loginUser = asyncHandler(async(req,res,next)=>{
 
     return res
     .status(200)
-    .cookie('accessToken',accessToken,{httpOnly:true, sameSite: 'none', secure:true})
+    .cookie('accessToken',accessToken,{httpOnly:true, secure:true})
     .cookie('refreshToken',refreshToken,{httpOnly:true, secure:true})
     .json(
         new ApiResponse(200,{
@@ -140,8 +144,185 @@ const logoutUser = asyncHandler(async(req,res,next)=>{
     )
 })
 
+const refreshAccessToken = asyncHandler(async(req,res,next)=>{
+    const incomingRefreshToken = req.cookies?.refreshToken || req.body.refreshToken
+
+    if(!incomingRefreshToken){
+        throw new ApiError(401,'Unauthorized Request')
+    }
+
+    try{
+        const decodedToken = jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
+
+        const user = await User.findById(decodedToken?._id)
+
+        if(!user){
+            throw new ApiError(401,'Invalid Refresh Token')
+        }
+
+        if(incomingRefreshToken!==user.refreshToken){
+            throw new ApiError(401,'Refresh Token is expired or used')
+        }
+
+        const {accessToken,refreshToken} = await generateTokens(user._id)
+
+        return res
+        .status(200)
+        .cookie('accessToken',accessToken,{
+            httpOnly:true,
+            secure:true
+        })
+        .cookie('refreshToken',refreshToken,{
+            httpOnly:true,
+            secure:true
+        })
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    accessToken:accessToken,
+                    refreshToken:refreshToken
+                },
+                'Access token refreshed'
+            )
+        )
+
+    }
+    catch(err){
+        logger.error('Invalid Refresh Token ',err?.message)
+        throw new ApiError(401, err?.message || "Invalid refresh token")
+    }
+})
+
+const chnageCurrentPassword = asyncHandler(async(req,res,next)=>{
+    const {oldPassword, newPassword} = req.body
+
+    const user = await User.findById(req.user?._id)
+
+    if(!user){
+        throw new ApiError(401,'Unauthorized Request')
+    }
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400,'Invalid Current Password')
+    }
+
+    user.password = newPassword
+    await user.save({validateBeforeSave:false})
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,{},'Password Changed Successfully')
+    )
+})
+
+const getCurrentUser = asyncHandler(async(req,res,next)=>{
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,req.user,'User fetched successfully')
+    )
+})
+
+const updateAccountDetails = asyncHandler(async(req,res,next)=>{
+    const {fullName, email} = req.body
+
+    if(!fullName && !email){
+        throw new ApiError(400,'Fields cannot be empty')
+    }
+
+    const updates = {};
+    if (fullName) updates.fullName = fullName;
+    if (email) updates.email = email;
+
+    const user = await User.aggregate([
+        {
+            $match:{
+                _id:req.user?._id
+            }
+        },
+        {
+            $set:{
+                ...updates // spread operator to include all updates
+            }
+        },
+        {
+            $project:{
+                password:0,
+                refreshToken:0,
+            }
+        },
+        {
+            $merge:{
+                into:'users',
+                whenMatched:'replace',  // merge changes with existing document
+                whenNotMatched:'discard' // don't insert new document if not matched
+            }
+        }
+    ])
+
+    res
+    .status(200)
+    .json(
+        new ApiResponse(200,{},'User details updated successfully')
+    )
+
+})
+
+const updateUserAvatar = asyncHandler(async(req,res,next)=>{
+    const avatarLocalPath = req.file?.path
+
+    if(!avatarLocalPath){
+        throw new ApiError(400,'Avatar file missing')
+    }
+
+    const user = await User.findById(req.user?._id)
+
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    const url = user.avatar
+
+    const public_id = url.split('/')[url.split('/').length-1].split('.')[0]
+
+    const deleteResponse = await deleteFromCloudinary(public_id)
+
+    if(!deleteResponse){
+        throw new ApiError(500,'File deletion failed')
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if(!avatar){
+        throw new ApiError(500,'Error while uploading file')
+    }
+
+    user.avatar = avatar.url
+
+    await user.save({validateBeforeSave:false})
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            await User.findById(user._id).select('-password -refreshToken'),
+            "Avatar image updated successfully"
+        )
+    )
+})
+
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshAccessToken,
+    chnageCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar
 }
