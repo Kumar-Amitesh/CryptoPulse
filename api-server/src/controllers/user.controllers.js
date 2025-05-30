@@ -4,7 +4,7 @@ import ApiResponse from '../utils/ApiResponse.utils.js'
 import User from '../models/Users.models.js'
 import uploadOnCloudinary from '../utils/cloudinary.utils.js'
 import logger from '../utils/logger.utils.js'
-import path from 'path'
+import fs from 'fs'
 
 const generateTokens = async(userId)=>{
     try{
@@ -36,15 +36,16 @@ const registerUser = asyncHandler(async(req,res,next)=>{
 
     const existedUser = await User.findOne({$or:[{username},{email}]})
 
-    if(existedUser){
-        throw new ApiError(400,'User with email or username already exist')
-    }
-
     const avatarLocalPath = req.file?.path
     // console.log('Avatar Local Path: ',avatarLocalPath)
 
     if(!avatarLocalPath){
         throw new ApiError(400,'Avatar file is required')
+    }
+
+    if(existedUser){
+        fs.unlinkSync(avatarLocalPath) // remove the locally saved temporary file
+        throw new ApiError(400,'User with email or username already exist')
     }
 
     const avatar = await uploadOnCloudinary(avatarLocalPath)
