@@ -1,7 +1,8 @@
 import Router from 'express'
 import {
     registerUser,
-    loginUser
+    loginUser,
+    logoutUser
 } from '../controllers/user.controllers.js'
 import upload from '../middleware/multer.middleware.js'
 import {
@@ -19,5 +20,8 @@ router.route('/register').post(
 )
 
 router.route('/login').post(validateLogin,loginUser)
+
+//secured routes
+router.route('/logout').get(verifyJWT,logoutUser)
 
 export default router

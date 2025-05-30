@@ -94,24 +94,54 @@ const loginUser = asyncHandler(async(req,res,next)=>{
         throw new ApiError(401,'Invalid User Credentials')
     }
 
-    const {accessToken, refreshToken} = generateTokens(user._id)
+    const {accessToken, refreshToken} = await generateTokens(user._id)
 
     const loggedInUser = await User.findById(user._id).select('-password -refreshToken')
 
     return res
     .status(200)
-    .cookie('accessToken',accessToken,{httpOnly:true, secure:true})
+    .cookie('accessToken',accessToken,{httpOnly:true, sameSite: 'none', secure:true})
     .cookie('refreshToken',refreshToken,{httpOnly:true, secure:true})
     .json(
         new ApiResponse(200,{
             user:loggedInUser,
-            accessToken,
-            refreshToken
+            accessToken:accessToken,
+            refreshToken:refreshToken
         },'User logged in Successfully')
     )
 });
 
+const logoutUser = asyncHandler(async(req,res,next)=>{
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $unset:{
+                refreshToken:1
+            }
+        },
+        {
+            // By default, findOneAndUpdate() returns the document as it was before update was applied. If you set new: true, findOneAndUpdate() will instead give you the object after update was applied.
+            new: true
+        }
+    )
+
+    return res
+    .status(200)
+    .clearCookie('accessToken',{
+        httpOnly: true,
+        secure: true
+    })
+    .clearCookie('refreshToken',{
+        httpOnly: true,
+        secure: true
+    })
+    .json(
+        new ApiResponse(200,{},'User logged out successfully')
+    )
+})
+
 export {
     registerUser,
-    loginUser
+    loginUser,
+    logoutUser
 }
