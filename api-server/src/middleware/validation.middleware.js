@@ -13,12 +13,13 @@ const validateRegister = [
     // only validates req.body
     check('email').isEmail().normalizeEmail().trim().escape(),
     // withMessage - Sets the error message for the previous validator.
-    check('password').isLength({min: 3}).withMessage('Password must be at least 8 characters long').trim.escape(),
+    check('password').isLength({min: 3}).withMessage('Password must be at least 8 characters long').trim().escape(),
     (req,res,next) => {
         // Extracts the validation errors of an express request
-        const result = validationResult(req)
-        if(!result.isEmpty()){
-            logger.error('Validation failed during register')
+        const errors = validationResult(req)
+        // console.log(errors)
+        if(!errors.isEmpty()){
+            logger.error('Validation failed during register: ',errors.array())
             throw new ApiError(400,'Validation Failed',errors.array())
         }
         next()

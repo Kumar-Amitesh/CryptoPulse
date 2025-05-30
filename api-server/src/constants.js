@@ -1,1 +1,1 @@
-export const DB_NAME = "cryptopulse"
+export const DB_NAME = "CryptoPulse"

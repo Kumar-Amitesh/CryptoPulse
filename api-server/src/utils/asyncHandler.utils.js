@@ -3,7 +3,7 @@ import logger from './logger.utils.js'
 const asyncHnadler = (requestHandler) => {
     return (req,res,next) => {
         Promise.resolve(requestHandler(req,res,next)).catch((err) =>{
-            logger.error('Error in asyncHnadler')
+            logger.error('Error: ',err)
             next(err)
         })
     }
