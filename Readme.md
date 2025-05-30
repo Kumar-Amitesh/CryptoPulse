@@ -1,6 +1,6 @@
 ## CryptoPulse
 
-- This api is designed to assess your ability to build a full backend system, interact with external APIs, use databases, and work with background jobs and event queues.
+- This API is designed to build a complete backend system that integrates external APIs, manages databases, and handles background jobs and event queues for efficient and scalable operation.
 - Build **two Node.js servers** using **MongoDB** and [**NATS](https://nats.io/)(or equivalent event queue)**. The two servers will communicate to collect and expose cryptocurrency statistics.
 
 ## Task 1
