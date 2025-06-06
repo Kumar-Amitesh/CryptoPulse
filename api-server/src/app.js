@@ -32,8 +32,10 @@ app.use(limiter)
 
 // import routes
 import userRouter from './routes/user.routes.js'
+import dataRouter from './routes/data.routes.js'
 
 //routes declaration
 app.use('/api/v1/users',userRouter)
+app.use('/api/v1/data',dataRouter)
 
 export default app
