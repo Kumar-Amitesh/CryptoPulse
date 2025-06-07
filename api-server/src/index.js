@@ -1,7 +1,7 @@
 import app from './app.js';
 import dotenv from 'dotenv';
 import connectDB from './config/db.config.js';
-import connectRedis from './config/redis.config.js';
+import { connectRedis } from './config/redis.config.js';
 import logger from './utils/logger.utils.js';
 
 dotenv.config({
