@@ -9,6 +9,8 @@ import {
 import logger from '../utils/logger.utils.js'
 import fs from 'fs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
+import axios from 'axios'
 
 const generateTokens = async(userId)=>{
     try{
@@ -314,6 +316,74 @@ const updateUserAvatar = asyncHandler(async(req,res,next)=>{
             "Avatar image updated successfully"
         )
     )
+})
+
+const STATE_TOKENS = new Set()
+const NONCE = new Set()
+
+const googleAuthentication = asyncHandler(async(req,res,next)=>{
+    const state = crypto.randomBytes(20).toString('hex')
+    STATE_TOKENS.add(state)
+
+    const nonce = crypto.createHash('sha256').update(process.env.GOOGLE_NONCE || crypto.randomBytes(20).toString('hex')).digest('hex')
+    NONCE.add(nonce)
+
+    try{
+        const response = await axios.get(
+            'https://accounts.google.com/o/oauth2/v2/auth',
+            {
+                params:{
+                    client_id: process.env.GOOGLE_CLIENT_ID,
+                    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                    response_type: process.env.GOOGLE_OAUTH2_RESPONSE_TYPE,
+                    scope: process.env.GOOGLE_OAUTH2_SCOPE,
+                    state: state,
+                    nonce: nonce
+                }
+            }
+        )
+
+        console.log('Google Authentication Response: ', response.data)
+    }
+    catch(err){
+        logger.error('Google Authentication Error: ', err)
+        throw new ApiError(500, 'Google Authentication failed')
+    }
+})
+
+const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
+    const {code,state} = req.query
+
+    if(!state || !code){
+        throw new ApiError(400, 'Invalid request parameters')
+    }
+
+    if(!STATE_TOKENS.has(state)){
+        throw new ApiError(400, 'Invalid state token')
+    }
+
+    const response = await axios.post(
+        'https://oauth2.googleapis.com/token',
+        {
+            params: {
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                grant_type: 'authorization_code',
+                code: code
+            },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        }
+    )
+
+    console.log('Google Authorization Response: ', response.data)
+
+    if(response.status !== 200){
+        logger.error('Google Authorization Error: ', response.data)
+        throw new ApiError(500, 'Google Authorization failed')
+    }
 })
 
 export {

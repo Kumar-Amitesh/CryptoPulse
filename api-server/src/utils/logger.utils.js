@@ -16,9 +16,9 @@ const logger = createLogger({
         new transports.Console({
             level: 'error'
         }),
-        new transports.File({filename: './logs/error.log', level:'error'}),
+        new transports.File({filename: '../logs/error.log', level:'error'}),
         new transports.File({
-            filename: './logs/warn.log', 
+            filename: '../logs/warn.log', 
             format: format.combine(
                 format((info) => {
                     return info.level === 'warn' ? info : false
@@ -28,7 +28,7 @@ const logger = createLogger({
             )
         }),
         new transports.File({
-            filename: './logs/http.log',
+            filename: '../logs/http.log',
             format: format.combine(
                 format((info) => {
                     // console.log(info);
@@ -39,7 +39,7 @@ const logger = createLogger({
             )
             // level: 'http',   // log everything at level 'http' and all higher priority levels
         }),
-        new transports.File({filename: './logs/combined.log',}),
+        new transports.File({filename: '../logs/combined.log',}),
     ]
 })
 
