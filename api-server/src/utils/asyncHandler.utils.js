@@ -4,7 +4,7 @@ const asyncHnadler = (requestHandler) => {
     return (req,res,next) => {
         Promise.resolve(requestHandler(req,res,next)).catch((err) =>{
             logger.error('Error: ',err)
-            next(err)
+            // next(err)
         })
     }
 }

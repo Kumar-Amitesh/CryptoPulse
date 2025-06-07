@@ -11,6 +11,7 @@ import fs from 'fs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import axios from 'axios'
+import{ client as redisClient }from '../config/redis.config.js'
 
 const generateTokens = async(userId)=>{
     try{
@@ -318,32 +319,33 @@ const updateUserAvatar = asyncHandler(async(req,res,next)=>{
     )
 })
 
-const STATE_TOKENS = new Set()
-const NONCE = new Set()
 
 const googleAuthentication = asyncHandler(async(req,res,next)=>{
+    const { method } = req.query?.type
     const state = crypto.randomBytes(20).toString('hex')
-    STATE_TOKENS.add(state)
 
-    const nonce = crypto.createHash('sha256').update(process.env.GOOGLE_NONCE || crypto.randomBytes(20).toString('hex')).digest('hex')
-    NONCE.add(nonce)
+    const rawNonce = crypto.randomBytes(16).toString('hex')
+    const nonce = crypto.createHash('sha256').update(rawNonce).digest('hex')
+
+    await redisClient.setEx(`google:oauth2:state:${state}`,60*2,'valid')
+    await redisClient.setEx(`google:oauth2:nonce:${nonce}`,60*2,'valid')
 
     try{
-        const response = await axios.get(
-            'https://accounts.google.com/o/oauth2/v2/auth',
-            {
-                params:{
-                    client_id: process.env.GOOGLE_CLIENT_ID,
-                    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-                    response_type: process.env.GOOGLE_OAUTH2_RESPONSE_TYPE,
-                    scope: process.env.GOOGLE_OAUTH2_SCOPE,
-                    state: state,
-                    nonce: nonce
-                }
-            }
-        )
+        const authURL = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+        `redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&` +
+        `response_type=${process.env.GOOGLE_OAUTH2_RESPONSE_TYPE}&` +
+        `scope=${process.env.GOOGLE_OAUTH2_SCOPE}&` +
+        `include_granted_scopes:true&` +
+        `state=${state}&` +
+        `nonce=${nonce}`
 
-        console.log('Google Authentication Response: ', response.data)
+        if(method && method==='register'){
+            authURL += `&prompt=consent&access_type=offline`
+        }
+
+        res.redirect(authURL)
+
     }
     catch(err){
         logger.error('Google Authentication Error: ', err)
@@ -358,30 +360,39 @@ const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
         throw new ApiError(400, 'Invalid request parameters')
     }
 
-    if(!STATE_TOKENS.has(state)){
-        throw new ApiError(400, 'Invalid state token')
+    const isValidState = await redisClient.get(`google:oauth2:state:${state}`)
+
+    if(!isValidState){
+        throw new ApiError(400, 'Invalid or expired state parameter')
     }
 
-    const response = await axios.post(
-        'https://oauth2.googleapis.com/token',
-        {
-            params: {
+    await redisClient.del(`google:oauth2:state:${state}`)
+
+    try{
+        const response = await axios.post(
+            'https://oauth2.googleapis.com/token',
+            {
                 client_id: process.env.GOOGLE_CLIENT_ID,
                 client_secret: process.env.GOOGLE_CLIENT_SECRET,
                 redirect_uri: process.env.GOOGLE_REDIRECT_URI,
                 grant_type: 'authorization_code',
                 code: code
-            },
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
             }
-        }
-    )
+        )
 
-    console.log('Google Authorization Response: ', response.data)
+        // implement further logic here
+        // check req.query.prompt to determine if it's a registration or login
+        // if registration, create a new user in the database and add refresh token
+        //if login no refresh token is there in response
 
-    if(response.status !== 200){
-        logger.error('Google Authorization Error: ', response.data)
+        return res
+        .status(200)
+        .json(
+            new ApiResponse(200, response.data, 'Google Authorization successful')
+        )
+    }
+    catch(err){
+        logger.error('Google Authorization Error: ', err)
         throw new ApiError(500, 'Google Authorization failed')
     }
 })
@@ -394,5 +405,7 @@ export {
     chnageCurrentPassword,
     getCurrentUser,
     updateAccountDetails,
-    updateUserAvatar
+    updateUserAvatar,
+    googleAuthentication,
+    googleAuthorizationCallback
 }

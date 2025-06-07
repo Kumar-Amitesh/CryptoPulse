@@ -7,7 +7,9 @@ import {
     chnageCurrentPassword,
     getCurrentUser,
     updateAccountDetails,
-    updateUserAvatar
+    updateUserAvatar,
+    googleAuthentication,
+    googleAuthorizationCallback
 } from '../controllers/user.controllers.js'
 import upload from '../middleware/multer.middleware.js'
 import {
@@ -25,6 +27,8 @@ router.route('/register').post(
 )
 
 router.route('/login').post(validateLogin,loginUser)
+router.route('/auth/google').get(googleAuthentication)
+router.route('/auth/google/callback').get(googleAuthorizationCallback)
 
 //secured routes
 router.route('/logout').get(verifyJWT,logoutUser)
