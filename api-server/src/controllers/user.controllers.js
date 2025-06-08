@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import axios from 'axios'
 import{ client as redisClient }from '../config/redis.config.js'
+import { decode } from 'punycode'
 
 const generateTokens = async(userId)=>{
     try{
@@ -117,6 +118,170 @@ const loginUser = asyncHandler(async(req,res,next)=>{
         },'User logged in Successfully')
     )
 });
+
+
+const googleAuthentication = asyncHandler(async(req,res,next)=>{
+    const {method} = req.query?.method || ''
+    const state = crypto.randomBytes(20).toString('hex')
+
+    const rawNonce = crypto.randomBytes(16).toString('hex')
+    const nonce = crypto.createHash('sha256').update(rawNonce).digest('hex')
+
+    await redisClient.setEx(`google:oauth2:state:${state}`,60*2,'valid')
+    await redisClient.setEx(`google:oauth2:nonce:${nonce}`,60*2,'valid')
+
+    try{
+        const authURL = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+        `redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&` +
+        `response_type=${process.env.GOOGLE_OAUTH2_RESPONSE_TYPE}&` +
+        `scope=${process.env.GOOGLE_OAUTH2_SCOPE}&` +
+        `include_granted_scopes:true&` +
+        `state=${state}&` +
+        `nonce=${nonce}`
+
+        if(method && method==='register'){
+            authURL += `&prompt=consent&access_type=offline`
+        }
+
+        res.redirect(authURL)
+
+    }
+    catch(err){
+        logger.error('Google Authentication Error: ', err)
+        throw new ApiError(500, 'Google Authentication failed')
+    }
+})
+
+const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
+    const {code,state, prompt} = req.query
+
+    if(!state || !code){
+        throw new ApiError(400, 'Invalid request parameters')
+    }
+
+    const isValidState = await redisClient.get(`google:oauth2:state:${state}`)
+
+    if(!isValidState){
+        throw new ApiError(400, 'Invalid or expired state parameter')
+    }
+
+    await redisClient.del(`google:oauth2:state:${state}`)
+
+    try{
+        const response = await axios.post(
+            'https://oauth2.googleapis.com/token',
+            {
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                grant_type: 'authorization_code',
+                code: code
+            }
+        )
+
+        const { access_token, expires_in, id_token, token_type } = response.data
+        const { refresh_token } = prompt === 'consent' ? response.data : {}
+        const {header, payload, signature} = jwt.decode(id_token, {complete: true})
+        const decodedToken = {
+            ...payload, 
+        }
+
+        const { nonce } = decodedToken
+        const isValidNonce = await redisClient.get(`google:oauth2:nonce:${nonce}`)
+        if(!isValidNonce){
+            throw new ApiError(400, 'Invalid or expired nonce parameter')
+        }
+
+        await redisClient.del(`google:oauth2:nonce:${nonce}`)
+
+        //validating an id_token
+
+        // Verify that the ID token is properly signed by the issuer.
+        if(await redisClient.get(`google:oauth2:jwks_uri`)){
+            const jwksUri = JSON.parse(await redisClient.get(`google:oauth2:jwks_uri`))
+            const isValidIDTOKEN = jwksUri.some((key) => {
+                return key.kid === header.kid && key.alg === header.alg
+            })
+            if(!isValidIDTOKEN){
+                throw new ApiError(400, 'Invalid ID Token')
+            }
+        }
+        else{
+            const jwksUri = await axios.get('https://www.googleapis.com/oauth2/v3/certs')
+            await redisClient.setEx(`google:oauth2:jwks_uri`, 60 * 60, JSON.stringify(jwksUri.data.keys))
+            const isValidIDTOKEN = jwksUri.data.keys.some((key) => {
+                return key.kid === header.kid && key.alg === header.alg
+            })
+            if(!isValidIDTOKEN){
+                throw new ApiError(400, 'Invalid ID Token')
+            }
+        }
+        // Verify that the value of the iss claim in the ID token
+        if(decodedToken.iss !== 'accounts.google.com' && decodedToken.iss !== 'https://accounts.google.com'){
+            throw new ApiError(400, 'Invalid ID Token issuer')
+        }
+        // Verify that the value of the aud claim in the ID token is equal to your app's client ID
+        if(decodedToken.aud !== process.env.GOOGLE_CLIENT_ID){
+            throw new ApiError(400, 'Invalid ID Token audience')
+        }
+        // Verify that the expiry time (exp claim) of the ID token has not passed.
+        if(decodedToken.exp < Date.now() / 1000){
+            throw new ApiError(400, 'ID Token has expired')
+        }
+
+        const user = await User.findOne({'oauth.providerId': decodedToken.sub})
+        if(!user){
+            const newUser = await User.create({
+                fullName: decodedToken.name,
+                email: decodedToken.email,
+                username: decodedToken.email.split('@')[0],
+                password: crypto.randomBytes(16).toString('hex'), // generate a random password
+                oauth: {
+                    isOuth: true,
+                    provider: 'google',
+                    providerId: decodedToken.sub,
+                    providerRefreshToken: refresh_token || null
+                }
+            })
+
+            //upload the avatar to cloudinary
+            const avatar = await uploadOnCloudinary(decodedToken.picture)
+            newUser.avatar = avatar.url
+            await newUser.save({validateBeforeSave:false})
+        }
+
+        const userId = user ? user._id : (await User.findOne({'oauth.providerId': decodedToken.sub}))._id
+
+        await redisClient.setEx(
+            `google:oauth2:user:${userId}`,
+            expires_in,
+            JSON.stringify({
+                accessToken: access_token
+            })
+        )
+
+        const {accessToken, refreshToken} = await generateTokens(userId)
+
+        return res
+        .status(200)
+        .cookie('accessToken', accessToken, {httpOnly: true, secure: true})
+        .cookie('refreshToken', refreshToken, {httpOnly: true, secure: true})
+        .json(
+            new ApiResponse(200, {
+                user: await User.findById(userId).select('-password -refreshToken -oauth'),
+                accessToken: accessToken,
+                refreshToken: refreshToken
+            }, 'Google Authorization successful')
+        )
+
+    }
+    catch(err){
+        logger.error('Google Authorization Error: ', err)
+        throw new ApiError(500, 'Google Authorization failed')
+    }
+})
+
 
 const logoutUser = asyncHandler(async(req,res,next)=>{
     await User.findByIdAndUpdate(
@@ -253,12 +418,6 @@ const updateAccountDetails = asyncHandler(async(req,res,next)=>{
             }
         },
         {
-            $project:{
-                password:0,
-                refreshToken:0,
-            }
-        },
-        {
             $merge:{
                 into:'users',
                 whenMatched:'replace',  // merge changes with existing document
@@ -320,83 +479,6 @@ const updateUserAvatar = asyncHandler(async(req,res,next)=>{
 })
 
 
-const googleAuthentication = asyncHandler(async(req,res,next)=>{
-    const { method } = req.query?.type
-    const state = crypto.randomBytes(20).toString('hex')
-
-    const rawNonce = crypto.randomBytes(16).toString('hex')
-    const nonce = crypto.createHash('sha256').update(rawNonce).digest('hex')
-
-    await redisClient.setEx(`google:oauth2:state:${state}`,60*2,'valid')
-    await redisClient.setEx(`google:oauth2:nonce:${nonce}`,60*2,'valid')
-
-    try{
-        const authURL = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-        `redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&` +
-        `response_type=${process.env.GOOGLE_OAUTH2_RESPONSE_TYPE}&` +
-        `scope=${process.env.GOOGLE_OAUTH2_SCOPE}&` +
-        `include_granted_scopes:true&` +
-        `state=${state}&` +
-        `nonce=${nonce}`
-
-        if(method && method==='register'){
-            authURL += `&prompt=consent&access_type=offline`
-        }
-
-        res.redirect(authURL)
-
-    }
-    catch(err){
-        logger.error('Google Authentication Error: ', err)
-        throw new ApiError(500, 'Google Authentication failed')
-    }
-})
-
-const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
-    const {code,state} = req.query
-
-    if(!state || !code){
-        throw new ApiError(400, 'Invalid request parameters')
-    }
-
-    const isValidState = await redisClient.get(`google:oauth2:state:${state}`)
-
-    if(!isValidState){
-        throw new ApiError(400, 'Invalid or expired state parameter')
-    }
-
-    await redisClient.del(`google:oauth2:state:${state}`)
-
-    try{
-        const response = await axios.post(
-            'https://oauth2.googleapis.com/token',
-            {
-                client_id: process.env.GOOGLE_CLIENT_ID,
-                client_secret: process.env.GOOGLE_CLIENT_SECRET,
-                redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-                grant_type: 'authorization_code',
-                code: code
-            }
-        )
-
-        // implement further logic here
-        // check req.query.prompt to determine if it's a registration or login
-        // if registration, create a new user in the database and add refresh token
-        //if login no refresh token is there in response
-
-        return res
-        .status(200)
-        .json(
-            new ApiResponse(200, response.data, 'Google Authorization successful')
-        )
-    }
-    catch(err){
-        logger.error('Google Authorization Error: ', err)
-        throw new ApiError(500, 'Google Authorization failed')
-    }
-})
-
 export {
     registerUser,
     loginUser,
@@ -409,3 +491,5 @@ export {
     googleAuthentication,
     googleAuthorizationCallback
 }
+
+// forgot password and refresh google access token

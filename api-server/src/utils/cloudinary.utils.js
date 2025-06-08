@@ -13,21 +13,29 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-const uploadOnCloudinary = async function(localFilePath){
+const uploadOnCloudinary = async function(filePath){
     try{
-        if(!localFilePath) return null
+        if(!filePath) return null
         //upload the file on cloudinary
-        const response = await cloudinary.uploader.upload(localFilePath,{
+        const response = await cloudinary.uploader.upload(filePath,{
             resource_type: 'auto'
         })
         // file has been uploaded successfull
         // console.log("file is uploaded on cloudinary response ", response);
-        fs.unlinkSync(localFilePath)
+
+        // Delete only if it's a local file (not a URL)
+        if (!filePath.startsWith("http") || !filePath.startsWith("https")) {
+            fs.unlinkSync(filePath);
+        }
         return response;
     }
     catch(error){
         logger.error("Cloudinary upload error:", error)
-        fs.unlinkSync(localFilePath) // remove the locally saved temporary file as the upload operation got failed
+        //fs.unlinkSync(localFilePath) // remove the locally saved temporary file as the upload operation got failed
+        // Try to delete only if it's a local file
+        if (!filePath.startsWith("http") || !filePath.startsWith("https")) {
+            try { fs.unlinkSync(filePath); } catch (err) {}
+        }
         return null
     }
 }

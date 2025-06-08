@@ -41,8 +41,31 @@ const userSchema = new Schema({
     },
     refreshToken:{
         type: String
+    },
+    oauth:{
+        isOuth: {
+            type: Boolean,
+            default: false
+        },
+        provider: {
+            type: String,
+            default: null
+        },
+        providerId: {
+            type: String,
+            required: function() { return this.oauth.isOuth; }, // Only required if isOuth is true
+            unique: true,
+            default: null
+        },
+        providerRefreshToken: {
+            type: String,
+            default: null
+        }
     }
-}, {timestamps: true} , { Collection: 'users' });
+}, {
+    timestamps: true,
+    Collection: 'users'
+});
 
 //  These are functions that run before a specific operation (like saving a document or validating it).
 userSchema.pre('save', async function(next){
