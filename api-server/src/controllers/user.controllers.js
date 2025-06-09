@@ -491,5 +491,3 @@ export {
     googleAuthentication,
     googleAuthorizationCallback
 }
-
-// forgot password and refresh google access token
