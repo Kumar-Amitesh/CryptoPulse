@@ -238,7 +238,7 @@ const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
                 username: decodedToken.email.split('@')[0],
                 password: crypto.randomBytes(16).toString('hex'), // generate a random password
                 oauth: {
-                    isOuth: true,
+                    isOauth: true,
                     provider: 'google',
                     providerId: decodedToken.sub,
                     providerRefreshToken: refresh_token || null
@@ -251,17 +251,17 @@ const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
             await newUser.save({validateBeforeSave:false})
         }
 
-        const userId = user ? user._id : (await User.findOne({'oauth.providerId': decodedToken.sub}))._id
+        const existingUser = user ? user : await User.findOne({'oauth.providerId': decodedToken.sub})
 
         await redisClient.setEx(
-            `google:oauth2:user:${userId}`,
+            `google:oauth2:user:${existingUser._id}`,
             expires_in,
             JSON.stringify({
                 accessToken: access_token
             })
         )
 
-        const {accessToken, refreshToken} = await generateTokens(userId)
+        const {accessToken, refreshToken} = await generateTokens(existingUser._id)
 
         return res
         .status(200)
@@ -269,7 +269,7 @@ const googleAuthorizationCallback = asyncHandler(async(req,res,next)=>{
         .cookie('refreshToken', refreshToken, {httpOnly: true, secure: true})
         .json(
             new ApiResponse(200, {
-                user: await User.findById(userId).select('-password -refreshToken -oauth'),
+                user: existingUser,
                 accessToken: accessToken,
                 refreshToken: refreshToken
             }, 'Google Authorization successful')

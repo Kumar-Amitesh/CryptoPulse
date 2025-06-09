@@ -2,6 +2,29 @@ import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+const oauthSchema = new Schema({
+  isOauth: {
+    type: Boolean,
+    default: false
+  },
+  provider: {
+    type: String,
+    default: null
+  },
+  providerId: {
+    type: String,
+    required: function () {
+      return this.isOauth;
+    },
+    unique: true,
+    default: null
+  },
+  providerRefreshToken: {
+    type: String,
+    default: null
+  }
+}, { _id: false }); // no separate _id for subdocument
+
 const userSchema = new Schema({
     username:{
         type: String,
@@ -37,30 +60,16 @@ const userSchema = new Schema({
     },
     password:{
         type: String,
-        required: [true, 'Password is required']
+        required: [true, 'Password is required'],
+        select: false, 
     },
     refreshToken:{
-        type: String
+        type: String,
+        select: false, // This field will not be returned in queries by default
     },
     oauth:{
-        isOuth: {
-            type: Boolean,
-            default: false
-        },
-        provider: {
-            type: String,
-            default: null
-        },
-        providerId: {
-            type: String,
-            required: function() { return this.oauth.isOuth; }, // Only required if isOuth is true
-            unique: true,
-            default: null
-        },
-        providerRefreshToken: {
-            type: String,
-            default: null
-        }
+        type: oauthSchema,
+        select: false
     }
 }, {
     timestamps: true,
