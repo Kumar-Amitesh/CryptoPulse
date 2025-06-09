@@ -12,7 +12,6 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import axios from 'axios'
 import{ client as redisClient }from '../config/redis.config.js'
-import { decode } from 'punycode'
 
 const generateTokens = async(userId)=>{
     try{
