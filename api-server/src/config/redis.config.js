@@ -1,5 +1,6 @@
 import { createClient } from 'redis'
 import logger from '../utils/logger.utils.js'
+import cryptoStats from '../utils/coinService.utils.js'
 
 const client = createClient({
     username: process.env.REDIS_USERNAME,
@@ -15,6 +16,13 @@ client.on('error', (err) => {
 })
 client.on('ready', () => {
     logger.info('Redis client is ready');
+});
+
+client.subscribe('crypto-events', (message) => {
+  const data = JSON.parse(message);
+  if (data.trigger === 'update') {
+    cryptoStats();
+  }
 });
 
 const connectRedis = async()=>{
