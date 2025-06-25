@@ -121,32 +121,33 @@ Make sure the following are installed:
 Create a `.env` file in the root folder with the following:
 
 ```env
-MONGO_URI=mongodb://localhost:27017/
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_USERNAME=default
-REDIS_PASSWORD=yourpassword
 
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+MONGO_URI=mongodb://your_mongo_host:27017/your_db_name
+REDIS_HOST=your_redis_host
+REDIS_PORT=your_redis_port
+REDIS_USERNAME=your_redis_username
+REDIS_PASSWORD=your_redis_password
 
-CoinGecko_URL_COIN=https://api.coingecko.com/api/v3/coins/markets
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+CoinGecko_URL_COIN=https://your_coingecko_api_url
 CoinGecko_API_KEY=your_coingecko_api_key
 
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:5000/api/v1/users/auth/google/callback
-GOOGLE_OAUTH2_RESPONSE_TYPE=code
-GOOGLE_OAUTH2_SCOPE=openid%20email%20profile
+GOOGLE_REDIRECT_URI=http://your_api_url/api/v1/users/auth/google/callback
+GOOGLE_OAUTH2_RESPONSE_TYPE=your_response_type
+GOOGLE_OAUTH2_SCOPE=your_oauth2_scope
 
 ACCESS_TOKEN_SECRET=your_access_token_secret
-ACCESS_TOKEN_EXPIRY=15m
+ACCESS_TOKEN_EXPIRY=your_access_token_expiry
 REFRESH_TOKEN_SECRET=your_refresh_token_secret
-REFRESH_TOKEN_EXPIRY=7d
+REFRESH_TOKEN_EXPIRY=your_refresh_token_expiry
 
-CORS_ORIGIN=http://localhost:3000
-PORT=5000
+CORS_ORIGIN=http://your_frontend_origin
+PORT=your_port
 ```
 
 ---
