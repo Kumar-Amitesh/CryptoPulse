@@ -1,6 +1,6 @@
 # 🚀 CryptoPulse
 
-**CryptoPulse** is a full-stack cryptocurrency data platform that offers real-time data aggregation, user authentication (including Google OAuth), and a robust caching mechanism using Redis. Designed for developers and crypto enthusiasts alike, it combines a secure REST API with a worker service that ensures up-to-date market information via scheduled background jobs.
+**CryptoPulse** is a backend API for a cryptocurrency data platform that provides real-time market data aggregation, secure user authentication (including Google OAuth), and efficient caching using Redis. Built for developers and crypto enthusiasts, it includes a RESTful API and a background worker service that ensures up-to-date coin data through scheduled jobs and Redis Pub/Sub messaging.
 
 ---
 
